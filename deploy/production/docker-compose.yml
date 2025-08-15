@@ -1,4 +1,4 @@
-﻿x-traefik-labels-front: &labels_front
+x-traefik-labels-front: &labels_front
   traefik.enable: "true"
   traefik.http.routers.front.rule: Host(`${FRONT_HOST}`)
   traefik.http.routers.front.entrypoints: websecure
@@ -20,36 +20,48 @@ services:
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --providers.file.directory=/etc/traefik/dynamic
-      - --providers.file.watch=true
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=${LE_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --api.dashboard=false
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik:/etc/traefik/dynamic:ro   # your mkcert certs + dynamic.yml
+      - traefik_letsencrypt:/letsencrypt
     labels:
       - traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)
       - traefik.http.routers.http-catchall.entrypoints=web
       - traefik.http.routers.http-catchall.middlewares=redirect-https
       - traefik.http.middlewares.redirect-https.redirectscheme.scheme=https
+      - com.centurylinklabs.watchtower.enable=false  # don't let Watchtower touch Traefik
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ../firecasting-frontend/vite-react-frontend
-      args:
-        VITE_API_BASE_URL: https://api.local.test/api/simulation
-    labels: *labels_front
+    image: gorm2303/firecasting-frontend:latest
+    labels:
+      <<: *labels_front
+      com.centurylinklabs.watchtower.enable: "true"
     restart: unless-stopped
     depends_on: [api]
 
   api:
-    build:
-      context: ../firecasting-backend
+    image: gorm2303/firecasting-api:latest
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
-    labels: *labels_api
+    labels:
+      <<: *labels_api
+      com.centurylinklabs.watchtower.enable: "true"
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    command: --interval 30 --label-enable --cleanup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  traefik_letsencrypt:
