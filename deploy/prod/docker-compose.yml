@@ -61,10 +61,14 @@ services:
 
   watchtower:
     image: containrrr/watchtower
-    command: --interval 30 --label-enable --cleanup
+    # every 5 minutes; only update labeled containers; clean old images
+    command: --schedule "0 */5 * * * *" --label-enable --cleanup
+    environment:
+      - TZ=Europe/Copenhagen
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+
 
 volumes:
   traefik_letsencrypt:
