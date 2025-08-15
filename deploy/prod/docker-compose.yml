@@ -3,6 +3,7 @@ x-traefik-labels-front: &labels_front
   traefik.http.routers.front.rule: Host(`${FRONT_HOST}`)
   traefik.http.routers.front.entrypoints: websecure
   traefik.http.routers.front.tls: "true"
+  traefik.http.routers.front.tls.certresolver: le           # <-- add this
   traefik.http.services.front.loadbalancer.server.port: "3000"
 
 x-traefik-labels-api: &labels_api
@@ -10,7 +11,9 @@ x-traefik-labels-api: &labels_api
   traefik.http.routers.api.rule: Host(`${API_HOST}`)
   traefik.http.routers.api.entrypoints: websecure
   traefik.http.routers.api.tls: "true"
+  traefik.http.routers.api.tls.certresolver: le             # <-- add this
   traefik.http.services.api.loadbalancer.server.port: "8080"
+
 
 services:
   traefik:
