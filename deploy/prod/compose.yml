@@ -20,7 +20,9 @@ x-traefik-labels-api: &labels_api
   traefik.http.routers.api-sse.tls: "true"
   traefik.http.routers.api-sse.priority: "20"
   traefik.http.routers.api-sse.service: api
-  traefik.http.routers.api-sse.middlewares: secure-headers@docker
+  traefik.http.routers.api-sse.middlewares: secure-headers@docker,sse-headers@docker
+  traefik.http.routers.api-sse.tls.certresolver: le    # optional but tidy to keep consistent
+
 
 
 services:
@@ -73,6 +75,8 @@ services:
       traefik.http.middlewares.rl.ratelimit.period: 1s
       # keep Watchtower off Traefik
       com.centurylinklabs.watchtower.enable: "false"
+      traefik.http.middlewares.sse-headers.headers.customResponseHeaders.Cache-Control: no-cache
+      traefik.http.middlewares.sse-headers.headers.customResponseHeaders.X-Accel-Buffering: "no"
     restart: unless-stopped
 
   frontend:
