@@ -15,6 +15,12 @@ x-traefik-labels-api: &labels_api
   traefik.http.routers.api.tls.certresolver: le
   traefik.http.services.api.loadbalancer.server.port: "8080"
   traefik.http.routers.api.middlewares: secure-headers@docker,rl@docker
+  traefik.http.routers.api-sse.rule: Host(`${API_HOST}`) && PathPrefix(`/api/simulation/progress`)
+  traefik.http.routers.api-sse.entrypoints: websecure
+  traefik.http.routers.api-sse.tls: "true"
+  traefik.http.routers.api-sse.priority: "20"
+  traefik.http.routers.api-sse.service: api
+  traefik.http.routers.api-sse.middlewares: secure-headers@docker
 
 
 services:
@@ -115,9 +121,11 @@ services:
   loki:
     profiles: ["monitoring"]
     image: grafana/loki:2.9.0
-    command: 
-      -config.file=/etc/loki/config.yml
-      -config.expand-env=true
+    command:
+      - -config.file=/etc/loki/config.yml
+      - -config.expand-env=true
+    environment:
+      - LOKI_RETENTION_DAYS=${LOKI_RETENTION_DAYS}
     volumes:
       - loki_data:/loki
       - ./monitoring/loki-config.yml:/etc/loki/config.yml:ro
