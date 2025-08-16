@@ -1,0 +1,27 @@
+{
+  "title": "Containers Overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "CPU (cores) by container",
+      "targets": [
+        { "expr": "rate(container_cpu_usage_seconds_total{image!=\"\"}[2m])", "legendFormat": "{{name}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory (bytes) by container",
+      "targets": [
+        { "expr": "container_memory_usage_bytes{image!=\"\"}", "legendFormat": "{{name}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 }
+    }
+  ],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" }
+}

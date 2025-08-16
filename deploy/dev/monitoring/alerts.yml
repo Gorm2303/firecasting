@@ -1,0 +1,45 @@
+groups:
+- name: api-sli
+  rules:
+  - alert: ApiHighErrorRate
+    expr: (sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count[5m]))) > 0.05
+    for: 5m
+    labels: 
+      severity: warning
+    annotations:
+      summary: "API 5xx > 5% (5m)"
+  - alert: ApiHighLatencyP95
+    expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le)) > 1.0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "API p95 latency > 1s (5m)"
+
+- name: infra
+  rules:
+  - alert: ContainerCPUHot
+    expr: topk(1, sum by (container)(rate(container_cpu_usage_seconds_total[5m]))) > 0.8
+    for: 5m
+    labels: 
+      severity: warning
+    annotations:
+      summary: "Container CPU > 80%"
+
+# If you add Blackbox exporter (see section 3), these fire too:
+- name: uptime
+  rules:
+  - alert: SiteDown
+    expr: probe_success{job="blackbox"} == 0
+    for: 2m
+    labels: 
+      severity: critical
+    annotations:
+      summary: "Probe failing: {{ $labels.instance }}"
+  - alert: SSLCertExpiringSoon
+    expr: (probe_ssl_earliest_cert_expiry - time()) < 7*24*3600
+    labels:
+      severity: warning
+    annotations:
+      summary: "TLS cert expiring in < 7 days: {{ $labels.instance }}"

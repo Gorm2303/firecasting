@@ -1,0 +1,91 @@
+{
+  "title": "Containers Overview",
+  "schemaVersion": 38,
+  "version": 6,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "CPU (cores) by container",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PROM" },
+      "fieldConfig": { "defaults": { "unit": "cores" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (container) (label_replace(rate(container_cpu_usage_seconds_total{job=\"cadvisor\"}[5m]),\"container\",\"$1\",\"name\",\"^/?(.*)$\"))) or (sum by (container) (label_replace(rate(container_cpu_usage_seconds_total{job=\"cadvisor\"}[5m]),\"container\",\"$1\",\"id\",\"^(.*)$\"))) or (sum by (container) (label_replace(increase(container_cpu_usage_seconds_total{job=\"cadvisor\"}[5m]) / 300,\"container\",\"$1\",\"name\",\"^/?(.*)$\"))) or (sum by (container) (label_replace(increase(container_cpu_usage_seconds_total{job=\"cadvisor\"}[5m]) / 300,\"container\",\"$1\",\"id\",\"^(.*)$\")))",
+          "legendFormat": "{{container}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory (working set) by container",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "PROM" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "label_replace(max by (name) (container_memory_working_set_bytes{job=\"cadvisor\"}),\"container\",\"$1\",\"name\",\"^/?(.*)$\") or label_replace(max by (id) (container_memory_working_set_bytes{job=\"cadvisor\"}),\"container\",\"$1\",\"id\",\"^(.*)$\")",
+          "legendFormat": "{{container}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Network RX/TX (bytes/s) by container",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "PROM" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "RX",
+          "expr": "label_replace(sum by (name) (rate(container_network_receive_bytes_total{job=\"cadvisor\"}[1m])),\"container\",\"$1\",\"name\",\"^/?(.*)$\") or label_replace(sum by (id) (rate(container_network_receive_bytes_total{job=\"cadvisor\"}[1m])),\"container\",\"$1\",\"id\",\"^(.*)$\")",
+          "legendFormat": "{{container}} RX"
+        },
+        {
+          "refId": "TX",
+          "expr": "label_replace(sum by (name) (rate(container_network_transmit_bytes_total{job=\"cadvisor\"}[1m])),\"container\",\"$1\",\"name\",\"^/?(.*)$\") or label_replace(sum by (id) (rate(container_network_transmit_bytes_total{job=\"cadvisor\"}[1m])),\"container\",\"$1\",\"id\",\"^(.*)$\")",
+          "legendFormat": "{{container}} TX"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk I/O (bytes/s) by container",
+      "description": "May be empty on Docker Desktop (limited cAdvisor mounts). Will populate on Linux hosts.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
+      "datasource": { "type": "prometheus", "uid": "PROM" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "Reads",
+          "expr": "label_replace(sum by (name) (rate(container_fs_reads_bytes_total{job=\"cadvisor\"}[5m])),\"container\",\"$1\",\"name\",\"^/?(.*)$\") or label_replace(sum by (id) (rate(container_fs_reads_bytes_total{job=\"cadvisor\"}[5m])),\"container\",\"$1\",\"id\",\"^(.*)$\")",
+          "legendFormat": "{{container}} read"
+        },
+        {
+          "refId": "Writes",
+          "expr": "label_replace(sum by (name) (rate(container_fs_writes_bytes_total{job=\"cadvisor\"}[5m])),\"container\",\"$1\",\"name\",\"^/?(.*)$\") or label_replace(sum by (id) (rate(container_fs_writes_bytes_total{job=\"cadvisor\"}[5m])),\"container\",\"$1\",\"id\",\"^(.*)$\")",
+          "legendFormat": "{{container}} write"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Host root disk used (%)",
+      "description": "Requires node-exporter (job=\"node\").",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "PROM" },
+      "fieldConfig": { "defaults": { "unit": "percent" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_filesystem_free_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\",fstype!~\"tmpfs|overlay\"})",
+          "legendFormat": "root (%)"
+        }
+      ]
+    }
+  ]
+}
