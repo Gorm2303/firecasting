@@ -24,7 +24,6 @@ x-traefik-labels-api: &labels_api
   traefik.http.routers.api-sse.tls.certresolver: le    # optional but tidy to keep consistent
 
 
-
 services:
   traefik:
     image: traefik:v3.1
@@ -192,6 +191,7 @@ services:
       traefik.http.routers.grafana.rule: Host(`${GRAFANA_HOST}`)
       traefik.http.routers.grafana.entrypoints: websecure
       traefik.http.routers.grafana.tls: "true"
+      traefik.http.routers.grafana.tls.certresolver: le 
       traefik.http.services.grafana.loadbalancer.server.port: "3000"
     restart: unless-stopped
 
