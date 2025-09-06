@@ -38,18 +38,20 @@ services:
       - traefik.http.middlewares.redirect-https.redirectscheme.scheme=https
     restart: unless-stopped
 
-  frontend:
-    build:
-      context: ../../../firecasting-frontend/vite-react-frontend
-      args:
-        VITE_API_BASE_URL: https://api.local.test/api/simulation
-    labels: *lbl_front
+  db:
+    image: postgres:16
+    container_name: fire_db
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass}
+    volumes:
+      - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 3s
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 10s
+      timeout: 5s
       retries: 10
-    depends_on: [api]
     restart: unless-stopped
 
   api:
@@ -66,10 +68,39 @@ services:
       MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED: "true"
       MANAGEMENT_METRICS_TAGS_APPLICATION: firecasting-api
 
+      # --- Postgres wiring for storage ---
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/appdb
+      SPRING_DATASOURCE_USERNAME: appuser
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-devpass}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      # If you use Flyway for schema:
+      SPRING_FLYWAY_ENABLED: "true"
     labels: *lbl_api
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../../../firecasting-frontend/vite-react-frontend
+      args:
+        VITE_API_BASE_URL: https://api.local.test/api/simulation
+    labels: *lbl_front
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db-data:
