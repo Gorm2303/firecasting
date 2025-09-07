@@ -90,11 +90,48 @@ services:
     image: gorm2303/firecasting-api:latest
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
+      # CORS (Spring MVC) — recommended in prod
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST}
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-HEADERS: "*"
+      SPRING_MVC_CORS_MAPPINGS_[/**]_EXPOSED-HEADERS: Content-Disposition
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOW-CREDENTIALS: "false"
+      SPRING_MVC_CORS_MAPPINGS_[/**]_MAX-AGE: "3600"
+      # Postgres wiring
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/appdb
+      SPRING_DATASOURCE_USERNAME: appuser
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-change-me}
+      # Schema management
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      # If you ever point at a non-empty DB without Flyway history, uncomment:
+      # SPRING_FLYWAY_BASELINE-ON-MIGRATE: "true"
+    depends_on:
+      db:
+        condition: service_healthy
     labels:
       <<: *labels_api
       com.centurylinklabs.watchtower.enable: "true"
     restart: unless-stopped
+
+  db:
+    image: postgres:16
+    container_name: fire_db
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+      # optional, but helps consistent timestamps/logs
+      TZ: Europe/Copenhagen
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # no ports: we keep Postgres internal-only
 
   watchtower:
     image: containrrr/watchtower
@@ -200,3 +237,4 @@ volumes:
   loki_data:
   grafana_data:
   traefik_letsencrypt:
+  db_data:

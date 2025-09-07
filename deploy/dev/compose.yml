@@ -59,10 +59,13 @@ services:
       context: ../../../firecasting-backend
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
-      SPRING_WEB_CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
-      SPRING_WEB_CORS_ALLOWED_HEADERS: "*"
-      SPRING_WEB_CORS_EXPOSED_HEADERS: Content-Disposition
+      # ✅ CORS (Spring MVC)
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST}
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-HEADERS: "*"
+      SPRING_MVC_CORS_MAPPINGS_[/**]_EXPOSED-HEADERS: Content-Disposition
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOW-CREDENTIALS: "false"
+      SPRING_MVC_CORS_MAPPINGS_[/**]_MAX-AGE: "3600"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED: "true"
@@ -90,7 +93,7 @@ services:
     build:
       context: ../../../firecasting-frontend/vite-react-frontend
       args:
-        VITE_API_BASE_URL: https://api.local.test/api/simulation
+        VITE_API_BASE_URL: https://${API_HOST}/api/simulation
     labels: *lbl_front
     depends_on:
       api:
