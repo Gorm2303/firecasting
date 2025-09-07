@@ -14,14 +14,18 @@ x-traefik-labels-api: &labels_api
   traefik.http.routers.api.tls: "true"
   traefik.http.routers.api.tls.certresolver: le
   traefik.http.services.api.loadbalancer.server.port: "8080"
-  traefik.http.routers.api.middlewares: secure-headers@docker,rl@docker
+  # add CORS here (keeps your secure headers + rate limit)
+  traefik.http.routers.api.middlewares: secure-headers@docker,rl@docker,api-cors@docker
+
   traefik.http.routers.api-sse.rule: Host(`${API_HOST}`) && PathPrefix(`/api/simulation/progress`)
   traefik.http.routers.api-sse.entrypoints: websecure
   traefik.http.routers.api-sse.tls: "true"
   traefik.http.routers.api-sse.priority: "20"
   traefik.http.routers.api-sse.service: api
-  traefik.http.routers.api-sse.middlewares: secure-headers@docker,sse-headers@docker
-  traefik.http.routers.api-sse.tls.certresolver: le    # optional but tidy to keep consistent
+  # keep SSE headers and add CORS here too
+  traefik.http.routers.api-sse.middlewares: secure-headers@docker,sse-headers@docker,api-cors@docker
+  traefik.http.routers.api-sse.tls.certresolver: le
+
 
 
 services:
@@ -66,6 +70,12 @@ services:
       traefik.http.middlewares.secure-headers.headers.browserXssFilter: "true"
       traefik.http.middlewares.secure-headers.headers.referrerPolicy: strict-origin-when-cross-origin
       traefik.http.middlewares.secure-headers.headers.permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+      traefik.http.middlewares.api-cors.headers.accessControlAllowOriginList: https://${FRONT_HOST}
+      traefik.http.middlewares.api-cors.headers.accessControlAllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+      traefik.http.middlewares.api-cors.headers.accessControlAllowHeaders: "*"
+      traefik.http.middlewares.api-cors.headers.accessControlExposeHeaders: "Content-Disposition"
+      traefik.http.middlewares.api-cors.headers.accessControlAllowCredentials: "false"
+      traefik.http.middlewares.api-cors.headers.addVaryHeader: "true"
       # gzip/deflate
       traefik.http.middlewares.compress.compress: "true"
       # simple rate limit for API
