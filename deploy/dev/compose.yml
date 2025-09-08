@@ -59,7 +59,8 @@ services:
       context: ../../../firecasting-backend
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      # ✅ CORS (Spring MVC)
+      # CORS (Spring MVC)
+      SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
       SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST}
       SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
       SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-HEADERS: "*"
