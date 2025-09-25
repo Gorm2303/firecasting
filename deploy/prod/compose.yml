@@ -36,12 +36,7 @@ x-traefik-labels-api: &labels_api
   # SSE-dedicated service with long upstream timeouts
   traefik.http.services.api-sse-svc.loadbalancer.server.port: "8080"
   traefik.http.services.api-sse-svc.loadbalancer.passHostHeader: "true"
-  traefik.http.services.api-sse-svc.loadbalancer.serversTransport: sse-transport
-
-  # Upstream (to API) timeouts for long-lived streams
-  traefik.http.serversTransports.sse-transport.respondingTimeouts.readTimeout: "3600s"
-  traefik.http.serversTransports.sse-transport.respondingTimeouts.writeTimeout: "3600s"
-  traefik.http.serversTransports.sse-transport.respondingTimeouts.idleTimeout: "3600s"
+  
 
 services:
   traefik:
