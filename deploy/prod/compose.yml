@@ -1,40 +1,47 @@
+version: "3.9"
+
 x-traefik-labels-front: &labels_front
   traefik.enable: "true"
   traefik.http.routers.front.rule: Host(`${FRONT_HOST}`)
   traefik.http.routers.front.entrypoints: websecure
   traefik.http.routers.front.tls: "true"
-  traefik.http.routers.front.tls.certresolver: le          
+  traefik.http.routers.front.tls.certresolver: le
   traefik.http.services.front.loadbalancer.server.port: "3000"
+  # compression is OK for the static site
   traefik.http.routers.front.middlewares: secure-headers@docker,compress@docker
 
 x-traefik-labels-api: &labels_api
   traefik.enable: "true"
+
+  # ---------- Generic API router (all /api except SSE) ----------
   traefik.http.routers.api.rule: Host(`${API_HOST}`)
   traefik.http.routers.api.entrypoints: websecure
   traefik.http.routers.api.tls: "true"
-  traefik.http.routers.api.service: api
   traefik.http.routers.api.tls.certresolver: le
+  traefik.http.routers.api.priority: "10"
+  traefik.http.routers.api.middlewares: secure-headers@docker,rl@docker,api-cors@docker,compress@docker
+  traefik.http.routers.api.service: api
   traefik.http.services.api.loadbalancer.server.port: "8080"
   traefik.http.services.api.loadbalancer.passHostHeader: "true"
-  # add CORS here (keeps your secure headers + rate limit)
-  traefik.http.routers.api.middlewares: secure-headers@docker,rl@docker,api-cors@docker
 
+  # ---------- SSE router (no compression/buffering) ----------
   traefik.http.routers.api-sse.rule: Host(`${API_HOST}`) && PathPrefix(`/api/simulation/progress`)
+  traefik.http.routers.api-sse.entrypoints: websecure
+  traefik.http.routers.api-sse.tls: "true"
+  traefik.http.routers.api-sse.tls.certresolver: le
+  traefik.http.routers.api-sse.priority: "50"
+  traefik.http.routers.api-sse.middlewares: sse-headers@docker,api-cors@docker
+  traefik.http.routers.api-sse.service: api-sse-svc
+
+  # SSE-dedicated service with long upstream timeouts
   traefik.http.services.api-sse-svc.loadbalancer.server.port: "8080"
   traefik.http.services.api-sse-svc.loadbalancer.passHostHeader: "true"
   traefik.http.services.api-sse-svc.loadbalancer.serversTransport: sse-transport
+
+  # Upstream (to API) timeouts for long-lived streams
   traefik.http.serversTransports.sse-transport.respondingTimeouts.readTimeout: "3600s"
   traefik.http.serversTransports.sse-transport.respondingTimeouts.writeTimeout: "3600s"
   traefik.http.serversTransports.sse-transport.respondingTimeouts.idleTimeout: "3600s"
-  traefik.http.routers.api-sse.entrypoints: websecure
-  traefik.http.routers.api-sse.tls: "true"
-  traefik.http.routers.api-sse.priority: "50"        # higher than generic router
-  traefik.http.routers.api-sse.service: api-sse-svc
-  # keep SSE headers and add CORS here too
-  traefik.http.routers.api-sse.middlewares: sse-headers@docker,api-cors@docker
-  traefik.http.routers.api-sse.tls.certresolver: le
-
-
 
 services:
   traefik:
@@ -46,13 +53,17 @@ services:
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      # Disable entrypoint timeouts (SSE friendly)
       - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=0
       - --entrypoints.websecure.transport.respondingTimeouts.writeTimeout=0
       - --entrypoints.websecure.transport.respondingTimeouts.idleTimeout=0
+      # ACME / Let's Encrypt
       - --certificatesresolvers.le.acme.tlschallenge=true
       - --certificatesresolvers.le.acme.email=${LE_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      # Dashboard disabled in prod
       - --api.dashboard=false
+      # Prometheus metrics (optional; harmless if unused)
       - --metrics.prometheus=true
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addRoutersLabels=true
@@ -64,12 +75,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
     labels:
-      traefik.enable: "true"  # ← enable Traefik's own labels so middlewares exist
+      traefik.enable: "true"
+
+      # Redirect all HTTP → HTTPS
       traefik.http.routers.http-catchall.rule: HostRegexp(`{any:.+}`)
       traefik.http.routers.http-catchall.entrypoints: web
       traefik.http.routers.http-catchall.middlewares: redirect-https
       traefik.http.middlewares.redirect-https.redirectscheme.scheme: https
-      # security headers (deduped referrerPolicy)
+
+      # ------- Security headers (safe defaults) -------
       traefik.http.middlewares.secure-headers.headers.stsSeconds: "31536000"
       traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains: "true"
       traefik.http.middlewares.secure-headers.headers.stsPreload: "true"
@@ -78,27 +92,33 @@ services:
       traefik.http.middlewares.secure-headers.headers.browserXssFilter: "true"
       traefik.http.middlewares.secure-headers.headers.referrerPolicy: strict-origin-when-cross-origin
       traefik.http.middlewares.secure-headers.headers.permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+
+      # ------- CORS mirrored at edge (Spring also handles it) -------
       traefik.http.middlewares.api-cors.headers.accessControlAllowOriginList: https://${FRONT_HOST}
       traefik.http.middlewares.api-cors.headers.accessControlAllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
       traefik.http.middlewares.api-cors.headers.accessControlAllowHeaders: "*"
       traefik.http.middlewares.api-cors.headers.accessControlExposeHeaders: "Content-Disposition"
       traefik.http.middlewares.api-cors.headers.accessControlAllowCredentials: "false"
       traefik.http.middlewares.api-cors.headers.addVaryHeader: "true"
-      # gzip/deflate
+
+      # ------- Global gzip/deflate (DON'T add to SSE route) -------
       traefik.http.middlewares.compress.compress: "true"
-      # simple rate limit for API
+
+      # ------- Simple API rate limit -------
       traefik.http.middlewares.rl.ratelimit.average: "50"
       traefik.http.middlewares.rl.ratelimit.burst: "100"
       traefik.http.middlewares.rl.ratelimit.period: 1s
-      # keep Watchtower off Traefik
-      com.centurylinklabs.watchtower.enable: "false"
-      # ---- SSE middleware: force no buffering/compress and explicit event-stream ----
+
+      # ------- SSE-specific headers (no buffering/compression) -------
       traefik.http.middlewares.sse-headers.headers.customResponseHeaders.X-Accel-Buffering: "no"
       traefik.http.middlewares.sse-headers.headers.customResponseHeaders.Cache-Control: no-cache
       traefik.http.middlewares.sse-headers.headers.customResponseHeaders.Content-Type: text/event-stream
+      # ensure no accidental compression header slips through
       traefik.http.middlewares.sse-headers.headers.customResponseHeaders.Content-Encoding: ""
-      # (HTTP/2 ignores Connection, but harmless)
       traefik.http.middlewares.sse-headers.headers.customResponseHeaders.Connection: keep-alive
+
+      # Keep Watchtower from managing Traefik
+      com.centurylinklabs.watchtower.enable: "false"
     restart: unless-stopped
 
   frontend:
@@ -106,36 +126,57 @@ services:
     labels:
       <<: *labels_front
       com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      - api
     restart: unless-stopped
-    depends_on: [api]
 
   api:
     image: gorm2303/firecasting-api:latest
     environment:
+      # --- Spring profile ---
       SPRING_PROFILES_ACTIVE: prod
-      # CORS (Spring MVC) — recommended in prod
+
+      # --- CORS handled by Spring (preflight OK) ---
       SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
-      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST}
-      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
-      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-HEADERS: "*"
-      SPRING_MVC_CORS_MAPPINGS_[/**]_EXPOSED-HEADERS: Content-Disposition
-      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOW-CREDENTIALS: "false"
-      SPRING_MVC_CORS_MAPPINGS_[/**]_MAX-AGE: "3600"
-      # Postgres wiring
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/appdb
+      SPRING_WEB_CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
+      SPRING_WEB_CORS_ALLOWED_HEADERS: "*"
+      SPRING_WEB_CORS_EXPOSED_HEADERS: Content-Disposition
+      SPRING_WEB_CORS_ALLOW_CREDENTIALS: "false"
+      SPRING_WEB_CORS_MAX_AGE: "3600"
+
+      # --- Postgres wiring ---
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/appdb?reWriteBatchedInserts=true
       SPRING_DATASOURCE_USERNAME: appuser
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-change-me}
-      # Schema management
-      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
+      # --- Hikari + JPA performance / safety ---
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "30"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: "30000"
+      SPRING_DATASOURCE_HIKARI_LEAK_DETECTION_THRESHOLD: "20000"
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE: "500"
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_UPDATES: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_GENERATE_STATISTICS: "false"
+
+      # --- Schema management ---
       SPRING_FLYWAY_ENABLED: "true"
-      # If you ever point at a non-empty DB without Flyway history, uncomment:
-      # SPRING_FLYWAY_BASELINE-ON-MIGRATE: "true"
+      # SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"  # enable if pointing to a non-empty DB w/o flyway history
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+
+      # --- App-specific (tune as needed) ---
+      SETTINGS_SSE_INTERVAL: "1000"   # ms between paced events
+      SETTINGS_RUNS: "10000"
+      SETTINGS_BATCH_SIZE: "500"
+      SETTINGS_TIMEOUT: "60000"
+      SIMULATION_PROGRESSSTEP: "1000"
     depends_on:
       db:
         condition: service_healthy
     labels:
       <<: *labels_api
-      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinkabs.watchtower.enable: "true"
     restart: unless-stopped
 
   db:
@@ -144,8 +185,7 @@ services:
     environment:
       POSTGRES_DB: appdb
       POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
-      # optional, but helps consistent timestamps/logs
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Europe/Copenhagen
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -155,11 +195,10 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
-    # no ports: we keep Postgres internal-only
+    # Intentionally no published ports (internal only)
 
   watchtower:
     image: containrrr/watchtower
-    # every 5 minutes; only update labeled containers; clean old images
     command: --schedule "0 */5 * * * *" --label-enable --cleanup
     environment:
       - TZ=Europe/Copenhagen
@@ -167,9 +206,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
-
-
-  # --- monitoring (only runs when profile enabled) ---
+  # ---------------- Optional: monitoring stack (enable with: docker compose --profile monitoring up -d) ----------------
   prometheus:
     profiles: ["monitoring"]
     image: prom/prometheus:v2.54.1
@@ -219,22 +256,6 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     restart: unless-stopped
 
-  nodeexporter:
-    profiles: ["monitoring"]
-    image: quay.io/prometheus/node-exporter:v1.8.1
-    command:
-      - --path.rootfs=/rootfs
-      - --path.procfs=/host/proc
-      - --path.sysfs=/host/sys
-      - --collector.filesystem.mount-points-exclude=^/(rootfs/)?(dev|proc|sys|run|var/lib/docker/.+|var/lib/containers/.+|snap/.+|tmp)(/|$)
-      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
-    volumes:
-      - /:/rootfs:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-    read_only: true
-    restart: unless-stopped
-
   grafana:
     profiles: ["monitoring"]
     image: grafana/grafana-oss:10.4.0
@@ -252,13 +273,13 @@ services:
       traefik.http.routers.grafana.rule: Host(`${GRAFANA_HOST}`)
       traefik.http.routers.grafana.entrypoints: websecure
       traefik.http.routers.grafana.tls: "true"
-      traefik.http.routers.grafana.tls.certresolver: le 
+      traefik.http.routers.grafana.tls.certresolver: le
       traefik.http.services.grafana.loadbalancer.server.port: "3000"
     restart: unless-stopped
 
 volumes:
+  traefik_letsencrypt:
+  db_data:
   prom_data:
   loki_data:
   grafana_data:
-  traefik_letsencrypt:
-  db_data:
