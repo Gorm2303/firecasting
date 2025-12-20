@@ -1,4 +1,3 @@
-version: "3.9"
 
 x-traefik-labels-front: &labels_front
   traefik.enable: "true"
