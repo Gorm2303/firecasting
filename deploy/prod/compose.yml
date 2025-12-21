@@ -120,6 +120,9 @@ services:
     labels:
       <<: *labels_front
       com.centurylinklabs.watchtower.enable: "true"
+    environment:
+      # Runtime config for the static frontend (injected by container entrypoint)
+      VITE_API_BASE_URL: https://${API_HOST}/api/simulation
     depends_on:
       - api
     restart: unless-stopped
@@ -170,7 +173,7 @@ services:
         condition: service_healthy
     labels:
       <<: *labels_api
-      com.centurylinkabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.enable: "true"
     restart: unless-stopped
 
   db:
