@@ -2,3 +2,62 @@
   certificates:
     - certFile: /etc/traefik/dynamic/certs/local.crt
       keyFile: /etc/traefik/dynamic/certs/local.key
+http:
+  routers:
+    frontend:
+      rule: Host(`fire.local.test`)
+      entrypoints:
+        - web
+        - websecure
+      tls: {}
+      service: frontend
+
+    api:
+      rule: Host(`api.local.test`)
+      entrypoints:
+        - web
+        - websecure
+      tls: {}
+      service: api
+      middlewares:
+        - api-cors
+
+    http-catchall:
+      rule: HostRegexp(`{any:.+}`)
+      entrypoints:
+        - web
+      middlewares:
+        - redirect-https
+
+  services:
+    frontend:
+      loadBalancer:
+        servers:
+          - url: http://frontend:3000
+
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:8080
+
+  middlewares:
+    redirect-https:
+      redirectScheme:
+        scheme: https
+
+    api-cors:
+      headers:
+        accessControlAllowOriginList:
+          - https://fire.local.test
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+          - PATCH
+        accessControlAllowHeaders: "*"
+        accessControlExposeHeaders:
+          - Content-Disposition
+        accessControlAllowCredentials: false
+        addVaryHeader: true

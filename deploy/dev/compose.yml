@@ -1,23 +1,25 @@
 ﻿x-front: &lbl_front
   traefik.enable: "true"
-  traefik.http.routers.front.rule: Host(`${FRONT_HOST}`)
-  traefik.http.routers.front.entrypoints: websecure
+  traefik.http.routers.front.rule: Host(`${FRONT_HOST:-fire.local.test}`)
+  traefik.http.routers.front.entrypoints: web,websecure
   traefik.http.routers.front.tls: "true"
+  traefik.http.routers.front.service: front
   traefik.http.services.front.loadbalancer.server.port: "3000"
 
 x-api: &lbl_api
   traefik.enable: "true"
-  traefik.http.routers.api.rule: Host(`${API_HOST}`)
-  traefik.http.routers.api.entrypoints: websecure
+  traefik.http.routers.api.rule: Host(`${API_HOST:-api.local.test}`)
+  traefik.http.routers.api.entrypoints: web,websecure
   traefik.http.routers.api.tls: "true"
+  traefik.http.routers.api.service: api
   traefik.http.services.api.loadbalancer.server.port: "8080"
+  # Ensure browser requests from https://${FRONT_HOST} can read API responses
+  traefik.http.routers.api.middlewares: api-cors@docker
 
 services:
   traefik:
     image: traefik:v3.1
     command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
@@ -29,13 +31,9 @@ services:
       - --api.dashboard=false
     ports: ["80:80","443:443"]
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik:/etc/traefik/dynamic:ro
     labels:
-      - traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)
-      - traefik.http.routers.http-catchall.entrypoints=web
-      - traefik.http.routers.http-catchall.middlewares=redirect-https
-      - traefik.http.middlewares.redirect-https.redirectscheme.scheme=https
+      {}
     restart: unless-stopped
 
   db:
@@ -60,8 +58,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       # CORS (Spring MVC)
-      SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST}
-      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST}
+      SPRING_WEB_CORS_ALLOWED_ORIGINS: https://${FRONT_HOST:-fire.local.test}
+      SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-ORIGINS: https://${FRONT_HOST:-fire.local.test}
       SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-METHODS: GET,POST,PUT,DELETE,OPTIONS,PATCH
       SPRING_MVC_CORS_MAPPINGS_[/**]_ALLOWED-HEADERS: "*"
       SPRING_MVC_CORS_MAPPINGS_[/**]_EXPOSED-HEADERS: Content-Disposition
@@ -93,9 +91,10 @@ services:
   frontend:
     build:
       context: ../../../firecasting-frontend/vite-react-frontend
-      args:
-        VITE_API_BASE_URL: https://${API_HOST}/api/simulation
     labels: *lbl_front
+    environment:
+      # Runtime config for the static frontend (injected by container entrypoint)
+      VITE_API_BASE_URL: https://${API_HOST:-api.local.test}/api/simulation
     depends_on:
       api:
         condition: service_started
