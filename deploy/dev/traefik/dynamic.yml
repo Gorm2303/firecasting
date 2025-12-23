@@ -1,21 +1,20 @@
 ﻿tls:
   certificates:
-    - certFile: /etc/traefik/dynamic/certs/local.crt
-      keyFile: /etc/traefik/dynamic/certs/local.key
+    - certFile: /etc/traefik/dynamic/certs/dev-local.crt
+      keyFile: /etc/traefik/dynamic/certs/dev-local.key
+
 http:
   routers:
     frontend:
-      rule: Host(`fire.local.test`)
+      rule: Host(`fire.local.test`) || Host(`fire.local.test.dk`)
       entrypoints:
-        - web
         - websecure
       tls: {}
       service: frontend
 
     api:
-      rule: Host(`api.local.test`)
+      rule: Host(`api.local.test`) || Host(`api.local.test.dk`)
       entrypoints:
-        - web
         - websecure
       tls: {}
       service: api
@@ -23,11 +22,12 @@ http:
         - api-cors
 
     http-catchall:
-      rule: HostRegexp(`{any:.+}`)
+      rule: PathPrefix(`/`)
       entrypoints:
         - web
       middlewares:
         - redirect-https
+      service: noop@internal
 
   services:
     frontend:
@@ -49,6 +49,7 @@ http:
       headers:
         accessControlAllowOriginList:
           - https://fire.local.test
+          - https://fire.local.test.dk
         accessControlAllowMethods:
           - GET
           - POST

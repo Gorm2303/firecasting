@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../firecasting-frontend"
+		},
+		{
+			"path": "../firecasting-backend"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}
