@@ -13,13 +13,22 @@ http:
       service: frontend
 
     api:
-      rule: Host(`api.local.test`) || Host(`api.local.test.dk`)
+      # Only route API-related paths to the backend; /swagger-ui/** is handled by the swaggerui router.
+      rule: (Host(`api.local.test`) || Host(`api.local.test.dk`)) && (PathPrefix(`/api`) || PathPrefix(`/actuator`) || PathPrefix(`/v3/api-docs`))
       entrypoints:
         - websecure
       tls: {}
       service: api
       middlewares:
         - api-cors
+
+    swaggerui:
+      rule: (Host(`api.local.test`) || Host(`api.local.test.dk`)) && PathPrefix(`/swagger-ui`)
+      priority: 100
+      entrypoints:
+        - websecure
+      tls: {}
+      service: swaggerui
 
     http-catchall:
       rule: PathPrefix(`/`)
@@ -39,6 +48,11 @@ http:
       loadBalancer:
         servers:
           - url: http://api:8080
+
+    swaggerui:
+      loadBalancer:
+        servers:
+          - url: http://swaggerui:8080
 
   middlewares:
     redirect-https:
