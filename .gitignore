@@ -4,3 +4,6 @@ deploy/dev/traefik/certs/*
 
 # local envs
 deploy/**/.env
+
+# Local dev verification artifacts
+/deploy/dev/out/
