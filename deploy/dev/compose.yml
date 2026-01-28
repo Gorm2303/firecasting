@@ -97,6 +97,8 @@ services:
       BASE_URL: /swagger-ui
       # Same-origin request (Traefik will route /v3/api-docs/public to the api service)
       SWAGGER_JSON_URL: /v3/api-docs/public
+      # Disable the online validator (can't reach local dev URLs like api.local.test).
+      VALIDATOR_URL: ""
     labels:
       traefik.enable: "true"
       traefik.http.routers.swaggerui.rule: Host(`${API_HOST:-api.local.test}`) && PathPrefix(`/swagger-ui`)
