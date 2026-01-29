@@ -46,7 +46,9 @@ services:
       POSTGRES_USER: appuser
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # NOTE: volume name is versioned so dev environments automatically start fresh
+      # when migration history changes.
+      - db-data-v2:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
       interval: 10s
@@ -130,4 +132,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  db-data:
+  db-data-v2:
