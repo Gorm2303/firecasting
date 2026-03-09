@@ -85,13 +85,25 @@ Confirmed:
 - Postgres is intentionally internal-only in both dev and prod compose and is not published as a host port. Evidence: `firecasting/deploy/dev/compose.yml`, `firecasting/deploy/prod/compose.yml`, `firecasting/.github/copilot-instructions.md`.
 - Backend transport changes are expected to follow explicit versioning rules, and snapshot tests exist to guard contract drift. Evidence: `firecasting-backend/docs/contracts/api-versioning.md`, `firecasting-backend/docs/adr/0001-openapi-snapshot-testing.md`.
 - Default persisted results are compact aggregated summaries rather than per-path traces; detailed trace storage is explicitly deferred or expected to live in a separate artifact path if ever added. Evidence: `firecasting-backend/docs/adr/0002-results-storage-volume.md`.
+- The backend already uses bounded TTL-based in-memory caches rather than unbounded process memory for recent run data: yearly summaries (`maxEntries=10`, `ttlMs=300000`), metric summaries (`50`, `900000`), CSV/full results (`2`, `300000`), and timings/meta (`200`, `900000`). Evidence: `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationSummariesCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationMetricSummariesCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationResultsCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationTimingsCache.java`.
 
 ### Current Product Surface
 
 Confirmed:
 
 - The core implemented product surface is the simulation workflow: form-driven setup, execution defaults, progress streaming, result retrieval, export, diff, and replay-related pages and API calls. Evidence: `firecasting-frontend/vite-react-frontend/src/api/simulation.tsx`, `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`.
-- The frontend also contains many placeholder or skeleton routes for adjacent planning tools such as time accounting, life events, buffer planning, goal planning, housing, and strategy editors. These exist in the route map but are not evidence that the underlying engines or persisted models already exist. Evidence: `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`.
+- The frontend also contains many placeholder or skeleton routes for adjacent planning tools such as time accounting, life events, buffer planning, goal planning, housing, and strategy editors. These currently function as visualized extension points that make missing capabilities and future extension seams visible; they are not evidence that the underlying engines or persisted models already exist. Evidence: `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`, maintainer input 2026-03-09.
+
+### Backend Execution And Engine Posture
+
+Confirmed:
+
+- The current deployment shape is single-instance at the API tier in both dev and prod compose. Evidence: `firecasting/deploy/dev/compose.yml`, `firecasting/deploy/prod/compose.yml`.
+
+Maintainer direction:
+
+- Single-instance backend execution is the deliberate near-term model because the system runs on a single free-tier VM and horizontal scaling is not relevant in the near future.
+- The `scheduleBased` simulation engine is the primary engine for current product use, and future engine-selection changes should be treated as explicit architectural work rather than implicit drift.
 
 ## Boundaries And Ownership
 
@@ -124,6 +136,10 @@ Inference:
 - The next durable architecture step is to consolidate the current simulation platform and its analysis tooling before expanding the many placeholder planning pages into independently modeled products.
 - Shared primitives are more likely to succeed than page-by-page feature islands. The existing frontend already has assumptions governance, saved scenarios, run diffing, replay status, and result retrieval; those are stronger foundations than the placeholder pages themselves.
 - If broader lifestyle planning tools become first-class, they should probably reuse scenario, timeline, policy, and comparison primitives rather than inventing separate storage or orchestration stacks.
+
+Maintainer direction:
+
+- Some placeholder surfaces may become independent tools and others may be integrated into the main flow, but that product split is still undecided.
 
 ### Expected System Shape
 
@@ -158,7 +174,8 @@ Evidence:
 Outcome:
 
 - The repo explicitly documents the non-negotiable edge/runtime/API constraints that already exist.
-- Known operational gaps such as backup/recovery visibility, cache eviction policy, and scaling limits are called out as explicit maintainer questions instead of remaining implicit.
+- The operational stance becomes explicit: no production Postgres backup automation for now, restore goes back to a reference point, and failure recovery should also restore to a reference point while preserving the queue.
+- The existing cache behavior and single-instance posture are documented as deliberate near-term constraints instead of open ambiguity.
 
 Why this unblocks later work:
 
@@ -168,7 +185,21 @@ Evidence:
 
 - SSE handling, contract versioning, and compact result persistence already have clear repo evidence. Evidence: `firecasting/deploy/prod/compose.yml`, `firecasting-backend/docs/contracts/api-versioning.md`, `firecasting-backend/docs/adr/0002-results-storage-volume.md`.
 
-### Phase 3: Complete The Already-Exposed Analysis Surface
+### Phase 3: Add Operator-Friendly Restore And Warm-Start Guidance
+
+Outcome:
+
+- The system has a documented operator path for restoring Postgres to a reference point and, if desired, repopulating frequently used deterministic runs by rerunning a curated set of popular simulations so they become available in the DB again.
+
+Why this comes before broader product expansion:
+
+- The maintainer explicitly does not want general Postgres backup automation right now, but does want a clearer restore/reference-point story and a possible way to repopulate useful persisted runs after restore.
+
+Evidence and constraints:
+
+- Deterministic persisted runs are already part of the backend contract, while random-seed runs are intentionally non-persisted and can only be served from short-lived caches. Evidence: `firecasting-backend/.github/copilot-instructions.md`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/FirecastingController.java`, maintainer input 2026-03-09.
+
+### Phase 4: Complete The Already-Exposed Analysis Surface
 
 Outcome:
 
@@ -182,7 +213,7 @@ Evidence:
 
 - Current client endpoints include `results-v3`, run diff, run replay/import, and historical run APIs. Evidence: `firecasting-frontend/vite-react-frontend/src/api/simulation.tsx`.
 
-### Phase 4: Promote Placeholder Planning Surfaces Through Shared Primitives
+### Phase 5: Promote Placeholder Planning Surfaces Through Shared Primitives
 
 Outcome:
 
@@ -196,7 +227,7 @@ Evidence:
 
 - Placeholder routes are visible, while assumptions governance and scenario-related utilities already exist. Evidence: `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`, `firecasting-frontend/vite-react-frontend/docs/assumptions-inventory.md`.
 
-### Phase 5: Revisit Scale And Storage Deliberately
+### Phase 6: Revisit Scale And Storage Deliberately
 
 Outcome:
 
@@ -204,7 +235,7 @@ Outcome:
 
 Why this is later:
 
-- The current repo evidence supports a single-instance queue plus in-memory coordination model and compact relational result persistence. There is not enough evidence to treat scale-out or artifact storage as the current direction.
+- The current repo evidence plus maintainer direction support a single-instance queue plus in-memory coordination model and compact relational result persistence. There is not enough evidence, and no near-term product need, to treat scale-out as the current direction.
 
 Evidence:
 
@@ -268,13 +299,53 @@ Evidence:
 - Rationale: The same built frontend can be promoted across environments.
 - Consequences: Container/runtime changes must preserve `env.js` generation and compatible fallback behavior.
 
+### D-008: Single-Instance Backend Is The Deliberate Near-Term Operating Model
+
+- Status: Accepted
+- Date: 2026-03-09
+- Decision: Keep the backend single-instance for the near future.
+- Rationale: The system runs on a single free-tier VM and horizontal scaling is not relevant in the near term.
+- Consequences: Queue coordination and cache design can stay optimized for one instance until product or infrastructure needs change.
+
+### D-009: No General Postgres Backup Automation For Now; Recovery Uses Reference-Point Restore
+
+- Status: Accepted
+- Date: 2026-03-09
+- Decision: Do not add a general production Postgres backup process for now. Restore and failure recovery should go back to a known reference point, with future operator guidance optionally describing how to repopulate frequently used deterministic simulations into the DB.
+- Rationale: This matches current operating constraints and maintainer preference.
+- Consequences: Recovery planning should focus on reference-point restore plus optional rerun/warm-start guidance rather than a fuller backup platform.
+
+### D-010: scheduleBased Is The Primary Simulation Engine
+
+- Status: Accepted
+- Date: 2026-03-09
+- Decision: Treat the `scheduleBased` simulation engine as the primary engine for current product use.
+- Rationale: Maintainer direction.
+- Consequences: Future engine-selection changes or comparisons should be explicit and documented.
+
+### D-011: Frontend Serialization Formats Should Prefer Backward Compatibility Via Upgrade
+
+- Status: Accepted
+- Date: 2026-03-09
+- Decision: Scenario/share-link and replay bundle formats should aim for backward compatibility, primarily by upgrading older data into the current shape.
+- Rationale: Maintainer direction.
+- Consequences: Future format changes should include upgrader logic or migration rules rather than only invalidating older data.
+
+### D-012: Placeholder Pages Exist As Visualized Extension Points
+
+- Status: Accepted
+- Date: 2026-03-09
+- Decision: Treat placeholder pages as extension points that expose missing capabilities and future seams, not as a fixed delivery sequence.
+- Rationale: Maintainer direction.
+- Consequences: Roadmap prioritization should stay flexible, and placeholder pages can become either standalone tools or flow-integrated tools.
+
 ## Risks
 
 Confirmed risks from repo evidence:
 
 - SSE regressions are easy to introduce through middleware or routing changes because prod explicitly carries special-case routing and headers for that path.
-- Operational durability is only partly visible. Postgres persistence is clear, but backup/recovery automation is not visible in the deployment repo.
-- The backend appears optimized for single-instance queue coordination and in-memory caches; scaling assumptions are not documented as current architecture.
+- Operational durability intentionally relies on reference-point restore rather than automated Postgres backup, which makes recovery speed and restore correctness more important than backup orchestration.
+- The backend is intentionally optimized for single-instance queue coordination and in-memory caches; if infrastructure constraints change later, the scale transition will need explicit design work.
 - The frontend route surface is broader than the clearly evidenced backend/domain support, creating a risk of implementing placeholder pages faster than shared architecture matures.
 
 ## Assumptions
@@ -282,28 +353,25 @@ Confirmed risks from repo evidence:
 Assumption:
 
 - The core near-term value of the system remains centered on simulation, run analysis, and planning workflows that can reuse the current simulation platform.
-- The many placeholder planning routes are exploratory product direction, not already-approved delivery commitments.
+- The many placeholder planning routes are visual extension points, not already-approved delivery commitments.
 - The backend docs folder, ADRs, and contract docs should remain the detailed source for backend semantics, while this file stays at the cross-repo level.
 
 ## Unknowns And Open Questions
 
 Unknown:
 
-- What is the intended production backup and recovery process for Postgres?
-- What is the intended cache eviction or TTL strategy for backend in-memory caches?
-- Is there an endorsed strategy for scaling beyond a single API instance, or is single-instance execution the deliberate medium-term model?
-- Which simulation engines are considered primary for current product use, and how is engine selection meant to evolve?
-- What is the long-term versioning strategy for scenario/share-link and replay bundle formats?
-- Which placeholder frontend surfaces are actual product priorities versus design exploration?
+- What is the precise operator workflow for preserving and restoring queue state when recovering to a reference point?
+- What should the first curated set of "most used" deterministic simulations be if a warm-start/rerun process is added after restore?
+- Which placeholder frontend surfaces should become standalone tools versus become part of the main simulation/planning flow?
+- When frontend serialization formats change, where should upgrader logic live and how should compatibility be tested?
 
 ## Evidence Gaps
 
 Missing inputs needed before making stronger architectural claims:
 
-- Maintainer guidance on product priority across the placeholder planning pages.
-- Explicit operational runbooks for backup, restore, and failure recovery.
-- Clear documentation of backend cache lifetime and memory-growth expectations.
-- Clear documentation of whether multi-instance API execution is a target, a non-goal, or simply undecided.
+- A concrete queue-persistence and queue-restore design, if failure recovery must preserve queued work across process or VM recovery.
+- A concrete operator runbook for restoring to a reference point and optionally repopulating popular deterministic simulations.
+- Product prioritization for which placeholder surfaces graduate first and whether they should be standalone or flow-integrated.
 
 ## Maintenance Rules
 
@@ -330,6 +398,7 @@ High-signal sources used to build and maintain this plan:
 - Backend timing invariants: `firecasting-backend/docs/invariants/timing-model.md`
 - Backend result-storage ADR: `firecasting-backend/docs/adr/0002-results-storage-volume.md`
 - Backend module structure: `firecasting-backend/firecasting/pom.xml`
+- Backend cache implementations: `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationSummariesCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationMetricSummariesCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationResultsCache.java`, `firecasting-backend/firecasting/application/src/main/java/dk/gormkrings/simulation/SimulationTimingsCache.java`
 - Frontend conventions: `firecasting-frontend/.github/copilot-instructions.md`
 - Frontend route surface: `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`
 - Frontend API surface: `firecasting-frontend/vite-react-frontend/src/api/simulation.tsx`
