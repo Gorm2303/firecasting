@@ -2,6 +2,8 @@
 
 This repo contains the local dev deployment setup for Firecasting (frontend + backend + Postgres + Traefik).
 
+Canonical cross-repo architecture and roadmap reference: `docs/project-plan.md`.
+
 ## Dev stack
 
 From the repo root:

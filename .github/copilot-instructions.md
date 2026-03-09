@@ -1,5 +1,9 @@
 # Copilot instructions – firecasting (deployment)
 
+## Cross-repo project plan
+- For cross-repo architecture, roadmap, and system-shape tasks, start with `docs/project-plan.md`.
+- Treat `docs/project-plan.md` as the canonical long-term reference, then drill into backend/frontend/deploy files cited there.
+
 ## Project layout
 - Docker Compose orchestration + Traefik reverse proxy (TLS termination)
 - `deploy/dev/` — development compose stack (localhost certs, auto-compose.metrics.yml for monitoring)
