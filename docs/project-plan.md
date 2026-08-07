@@ -2,7 +2,7 @@
 
 Status: Canonical cross-repo planning document for the current Firecasting workspace.
 
-Last updated: 2026-03-09
+Last updated: 2026-08-07
 
 ## Future Prompting Guide
 
@@ -227,6 +227,12 @@ Evidence:
 
 - Placeholder routes are visible, while assumptions governance and scenario-related utilities already exist. Evidence: `firecasting-frontend/vite-react-frontend/src/AppRoutes.tsx`, `firecasting-frontend/vite-react-frontend/docs/assumptions-inventory.md`.
 
+Detail:
+
+- The concrete phase-by-phase breakdown for this promotion work (design-system foundation, nav information architecture, and an 8-phase page-completion order) is maintained separately rather than duplicated here. See `firecasting/docs/frontend-ui-plan.md`.
+- Progress (2026-08-07): Phases 0-6 of that plan are complete — ~26 previously-placeholder routes across Lifestyle, Plan & Strategy, Execute/Progress, Portfolio, and Reflect are now real local implementations (calculators grounded in `Assumptions` values, or reading real percentile data from the user's last simulation run via a new `useLatestSimulationResult` hook), all on the new Tailwind-based design system. `/community-benchmarks` and `/advisor-share-portal` remain deliberate skeletons per D-012/D-013 — they need backend/product decisions this session didn't make.
+- Progress (2026-08-08): Phase 7 (retrofitting pre-existing live pages onto the design system) is closed out. 9 small/medium pages were migrated; a real global bug was caught and fixed in the process (Tailwind Preflight silently strips list markers from unclassed `<ul>`/`<ol>`, confirmed via screenshot on `InfoPage`, fixed with one scoped CSS rule rather than per-file patches). The 7 largest, most heavily-tested files (~18k lines total, including the core simulation input form with ~15 dedicated test files) were deliberately left on the legacy inline-style system — maintainer decision that a styling-only pass isn't worth the regression risk on business-critical code. The full `frontend-ui-plan.md` initiative (Phases 0-7) is now considered complete.
+
 ### Phase 6: Revisit Scale And Storage Deliberately
 
 Outcome:
@@ -339,6 +345,14 @@ Evidence:
 - Rationale: Maintainer direction.
 - Consequences: Roadmap prioritization should stay flexible, and placeholder pages can become either standalone tools or flow-integrated tools.
 
+### D-013: Frontend Adopts Tailwind CSS And A Consolidated Collapsible Nav
+
+- Status: Accepted
+- Date: 2026-08-07
+- Decision: The frontend visual refresh uses Tailwind CSS (via `@tailwindcss/vite`) plus a small shared primitives layer, rather than only refining the existing inline-style CSS variables. The 10-group flat nav (47 items) is consolidated into ~5 top-level groups (Home, Simulate, Plan & Strategy, Lifestyle Tools, Track & Reflect) with per-group collapse/expand state and icons on groups/items. Full detail: `firecasting/docs/frontend-ui-plan.md`.
+- Rationale: Maintainer direction. The current UI has no design-system infrastructure (1,864 ad hoc inline `style={{...}}` usages) and the nav will become unscannable once the ~30 skeleton pages listed in D-012 go live.
+- Consequences: New pages built under the Phase 2-6 rollout in `frontend-ui-plan.md` should use the new `src/components/ui/*` primitives and Tailwind utility classes rather than adding more local inline-style consts. `NavGroup` data shape stays stable so `CategoryLandingPage`/`LandingPage` are unaffected by the regrouping.
+
 ## Risks
 
 Confirmed risks from repo evidence:
@@ -405,3 +419,4 @@ High-signal sources used to build and maintain this plan:
 - Frontend runtime config: `firecasting-frontend/vite-react-frontend/src/config/runtimeEnv.ts`
 - Frontend container injection: `firecasting-frontend/vite-react-frontend/docker-entrypoint.sh`
 - Frontend assumptions/discovery doc: `firecasting-frontend/vite-react-frontend/docs/assumptions-inventory.md`
+- Frontend UI/nav/page-completion plan: `firecasting/docs/frontend-ui-plan.md`
